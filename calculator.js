@@ -4,7 +4,7 @@ var showHint = document.getElementById("hint");
 var numStr = "";
 var sequence = "";
 var maxLength = 15;
-var operators = "+-*/";
+var operators = "+*/-";
 var err = false;
 var previousOperator;
 
@@ -32,7 +32,7 @@ function operate(e) {
 	var key = e.target.innerHTML;
 	if (!err) {
 		if ((numStr.length < maxLength) && (+key || (key == 0 && numStr.length > 0) || (key == "." && !~numStr.indexOf(".") && numStr.length <= (maxLength - 2)))) {
-			createNum(key);//create operand
+			createNum(key);	//create operand
 			if (!previousOperator) {
 				sequence = "";
 				showHint.innerHTML = "\xA0";
@@ -43,8 +43,9 @@ function operate(e) {
 			if (key == "\u2190") {backspace(); return}
 			if (key == "CE") {resetOperand(); return}
 			if (key == "\xB1") {changeSign(); return}
-			if (key == "\u221A") {squareRoot(); return}
+			if (key == "\u221A") {squareRoot(); return}		
 		}
+		if (key == "rand") {getRandom(); return}
 		if (key == "1/x") {oneDivideX(); return}
 		if (~operators.indexOf(key)) {calculate(key); return}
 		if (key == "=") {calculate(); return}
@@ -65,12 +66,14 @@ function createNum(key) {
 }
 
 function backspace() {
-	numStr = showNum.innerHTML;
-	numStr = numStr.slice(0, -1);
-	if (!numStr.length) {
-		showNum.innerHTML = 0;
-	} else {
-		showNum.innerHTML = numStr;
+	if (!sequence || isPending(sequence)) {
+		numStr = showNum.innerHTML;
+		numStr = numStr.slice(0, -1);
+		if (!numStr.length) {
+			showNum.innerHTML = 0;
+		} else {
+			showNum.innerHTML = numStr;
+		}
 	}
 }
 
@@ -89,17 +92,35 @@ function resetAll() {
 
 function changeSign() {
 	numStr = showNum.innerHTML;
-	numStr = (-1 * numStr).toString(); 
+	numStr *= -1; 
 	showNum.innerHTML = numStr;
 	numStr = "0";
+	if (sequence && !isPending(sequence)) { //also change sign of first operand in sequence of last result of calculation if it was done 
+		sequence = -1 * sequence.slice(0, sequence.lastIndexOf(lastOperation(sequence))) + lastOperation(sequence);
+	}
+}
+
+function getRandom() {
+	var randomMax = "";
+	for (var i = 0; i < maxLength; i++) {
+		randomMax += "9";
+	}
+	randomMax = +randomMax.slice(0, Math.floor((Math.random() * maxLength) + 1));
+	var randomInt = Math.floor((Math.random() * randomMax) + 1);
+	var randomFloat = randomInt + Math.random().toFixed(Math.floor((Math.random() * maxLength) + 1));
+	var randomArr = [,randomInt, -randomInt, +randomFloat, -randomFloat];
+	showNum.innerHTML = randomArr[Math.floor((Math.random() * (randomArr.length - 1)) + 1)];
+	showHint.innerHTML = "random";
 }
 
 function squareRoot() {
 	numStr = showNum.innerHTML;
+	showHint.innerHTML = "\u221A" + numStr;
 	if (+numStr > 0) {
-		numStr = shorter(Math.sqrt(1 * numStr));
+		numStr = Math.sqrt(1 * numStr);
 		showNum.innerHTML = numStr;
 		numStr = "0";
+		sequence = "";
 	} else {
 		error(1);
 	}
@@ -108,9 +129,11 @@ function squareRoot() {
 function oneDivideX() {
 	numStr = showNum.innerHTML;
 	if (+numStr) {
-		numStr = shorter((1/numStr));
+		numStr = (1/numStr);
+		if (isError(numStr)) return;
 		showNum.innerHTML = numStr;
 		numStr = "0";
+		sequence = "";
 	} else {
 		error(0);
 	}
@@ -118,53 +141,41 @@ function oneDivideX() {
 
 function calculate(key) {
 	if (sequence) {
-		if (operators.split("").some(function(item) {return sequence.lastIndexOf(item) == sequence.length - 1})){ // if sequence ends with some of operators
+		if (isPending(sequence)) { // if sequence ends with operator
 			sequence += isNegative(showNum.innerHTML);
 		}
-		if (key && !previousOperator) {
-			sequence = sequence.slice(0, sequence.lastIndexOf(lastOperation(sequence))) + key;
+		if (key && !previousOperator) { // if operator pressed after "="
+			sequence = sequence.slice(0, sequence.lastIndexOf(lastOperation(sequence))) + key;// remove saved last operation from sequence
 			previousOperator = key;
+			showHint.innerHTML = sequence;
 			return;
 		}
 		showHint.innerHTML = sequence;
-		numStr = shorter(eval(sequence));
-		if (numStr == "NaN" || numStr == Infinity || numStr == -Infinity) {
-			error(0);
-			numStr = "0";
-			return;
-		}
-		showNum.innerHTML = numStr;
+		numStr = eval(sequence);
+		if (isError(numStr)) return;
+		showNum.innerHTML = (numStr + "").indexOf(".") > -1 ? +numStr.toFixed(maxLength - (Math.round(+numStr) + "").length) : numStr;
+		//fix mistake in calculations of float
 	}
 	if (key) {
 		sequence = +showNum.innerHTML + key;
 	} else if (sequence) {
-		sequence = +showNum.innerHTML + lastOperation(sequence);
+		sequence = +showNum.innerHTML + lastOperation(sequence); // create new sequence with last operation for second pressing "="
 	}
 	previousOperator = key;
 	numStr = "0";
 }
 
-function shorter(num) {
-	var numStr = num.toString();
-	if (numStr.length > maxLength) {
-		numStr = numStr.slice(0, maxLength - numStr.length);
-	}
-	return numStr;
-}
-
-function error(num) {
-	err = true;
-	var errors = ["can't x/0", "can't \u221A-x"];
-	showNum.innerHTML = "Error: " + errors[num];
-	showHint.innerHTML = "Push 'C' to clear";
-}
-
 function lastOperation(sequence) {
 	var operatorIndex;
-	operators.split("").some(function(item) {
-		operatorIndex = sequence.lastIndexOf(item);
-		return operatorIndex > -1;
-	});
+	operatorIndex = sequence.indexOf("(");
+	if (operatorIndex > -1) {
+		 operatorIndex--;
+	} else {
+		operators.split("").some(function(item) {
+			operatorIndex = sequence.lastIndexOf(item);
+			return operatorIndex > -1;
+		});
+	}
 	return sequence.slice(operatorIndex);
 }
 
@@ -175,9 +186,31 @@ function isNegative(numStr) {
 	return numStr;
 }
 
-//TODO long numbers
-//check wrong js work with float
-//"="
-//"%"
-//open in sized window
-//listen keyboard
+function isPending(sequence) {
+	return operators.split("").some(function(item) {
+		return sequence.lastIndexOf(item) == sequence.length - 1;
+	});
+}
+
+function isError(numStr) {
+	numStr += ""; 
+	if (!isFinite(numStr)) {
+		error(0);
+		return true;
+	}
+	if ((numStr.length > maxLength + 1 && !~numStr.indexOf(".")) || ~numStr.indexOf("e")) {
+		showHint.innerHTML = "Too long number for accuracy. Press 'C'";
+		showNum.innerHTML = numStr;
+		err = true;
+		return true;
+	}
+}
+
+function error(num) {
+	err = true;
+	var errors = ["can't x/0", "can't \u221A-x"];
+	showNum.innerHTML = "Error: " + errors[num];
+	showHint.innerHTML = "Press 'C' to clear";
+}
+
+
