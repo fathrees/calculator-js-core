@@ -30,6 +30,7 @@ function mouseUpStyle(e) {
 
 function operate(e) {
 	var key = e.target.innerHTML;
+	if (key == "C") {resetAll(); return}
 	if (!err) {
 		if ((numStr.length < maxLength) && (+key || (key == 0 && numStr.length > 0) || (key == "." && !~numStr.indexOf(".") && numStr.length <= (maxLength - 2)))) {
 			createNum(key);	//create operand
@@ -50,7 +51,6 @@ function operate(e) {
 		if (~operators.indexOf(key)) {calculate(key); return}
 		if (key == "=") {calculate(); return}
 	}
-	if (key == "C") {resetAll(); return}
 }
 
 function createNum(key) {
@@ -69,11 +69,7 @@ function backspace() {
 	if (!sequence || !sequence.secondArg) {
 		numStr = showNum.innerHTML;
 		numStr = numStr.slice(0, -1);
-		if (!numStr.length) {
-			showNum.innerHTML = 0;
-		} else {
-			showNum.innerHTML = numStr;
-		}
+		showNum.innerHTML = !numStr.length ? 0 : numStr;
 	}
 }
 
@@ -114,10 +110,10 @@ function getRandom() {
 }
 
 function squareRoot() {
-	numStr = showNum.innerHTML;
+	numStr = +showNum.innerHTML;
 	showHint.innerHTML = "\u221A" + numStr;
-	if (+numStr > 0) {
-		numStr = Math.sqrt(1 * numStr);
+	if (numStr > 0) {
+		numStr = Math.sqrt(numStr);
 		showNum.innerHTML = numStr;
 		numStr = "0";
 		sequence = null;
@@ -130,7 +126,6 @@ function oneDivideX() {
 	numStr = showNum.innerHTML;
 	if (+numStr) {
 		numStr = (1/numStr);
-		if (isError(numStr)) return;
 		showNum.innerHTML = numStr;
 		numStr = "0";
 		sequence = null;
@@ -153,7 +148,10 @@ function calculate(key) {
 		}
 		showHint.innerHTML = sequence.getString();
 		numStr = sequence.result();
-		if (isError(numStr)) return;
+		if (!isFinite(numStr)) {
+			error(0);
+			return;
+		}
 		showNum.innerHTML = numStr;
 	}
 	if (key) {
@@ -165,23 +163,9 @@ function calculate(key) {
 	numStr = "0";
 }
 
-function isError(numStr) {
-	numStr += ""; 
-	if (!isFinite(numStr)) {
-		error(0);
-		return true;
-	}
-	if ((numStr.length > maxLength) && !~numStr.indexOf(".")) {
-		showHint.innerHTML = "Too long number for accuracy. Press 'C'";
-		showNum.innerHTML = numStr;
-		err = true;
-		return true;
-	}
-}
-
 function error(num) {
 	err = true;
-	var errors = ["can't x/0", "can't \u221A-x"];
+	var errors = ["x/0 or Infinity", "can't \u221A-x"];
 	showNum.innerHTML = "Error: " + errors[num];
 	showHint.innerHTML = "Press 'C' to clear";
 }
@@ -203,12 +187,12 @@ function Sequence(firstArg, operator, secondArg) {
 	function isFloat(arg1, operator, arg2) {
 		var fraction = [arg1.indexOf(".") + 1, arg2.indexOf(".") + 1];
 		var fractionLength = fraction[0] || fraction[1] ? Math.max(arg1.slice(fraction[0]).length, arg2.slice(fraction[1]).length) : null;
-		var factor = 1;
+		var factor = "1";
 		for (var i = 0; i < fractionLength; i++) {
 			factor += "0";
 		}
-		var sequence = (operator == "+" || operator == "-") ? "(" + ((arg1 * factor) + operator + (isNegative(arg2 * factor))) + ")/" + factor : 
-			"(" + ((arg1 * factor) + operator + (isNegative(arg2))) + ")/" + factor;
+		var sequence =  "(" + ((arg1 * factor) + operator + (isNegative(arg2 * factor))) + ")/";
+		sequence += (operator == "+" || operator == "-") ? factor : factor * factor;
 		var result = eval(sequence) + "";
 		fraction = result.indexOf(".") + 1;
 		if (fraction && result.length > maxLength + 1) {
